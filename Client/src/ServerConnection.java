@@ -34,7 +34,7 @@ public class ServerConnection {
 	private boolean m_HasSentMessage = false;
 	private boolean m_HasConfirmedMessage = true;
 	private String m_SentMessage = "";
-	private int m_Timeout = 250;
+	private int m_Timeout = 100;
 	private String m_name = "";
 
 	public ServerConnection(String hostName, int port) 
@@ -104,11 +104,13 @@ public class ServerConnection {
 		String inputs[] = input.split(" ");
 		if (inputs[2].contains("Welcome"))
 		{
+			System.out.println("Handshake success");
 			m_IsConnected = true;
 			return true;
 		}
 		else
 		{
+			System.out.println("Handshake failed");
 			m_IsConnected = false;
 			return false;
 		}
@@ -123,14 +125,14 @@ public class ServerConnection {
 		try 
 		{
 			m_socket.receive(m_InPacket);
-			System.out.println("Packet received\n");
+			System.out.println("Packet received");
 		} 
 		catch (SocketTimeoutException e) 
 		{
 			//If message was timed out & an unconfirmed message was sent
 			if (m_HasSentMessage && !m_HasConfirmedMessage)
 			{
-				System.out.println("Acknowledgement of message was not received, retrying\n");
+				System.out.println("Acknowledgement of message was not received, retrying");
 				sendChatMessage(m_SentMessage);	
 			}
 			return "";
@@ -138,6 +140,12 @@ public class ServerConnection {
 		
 		String input = new String(m_InBuf, 0, m_InPacket.getLength());
 		String inputs[] = input.split(" ");
+		
+		if (input.equals("heartbeat"))
+		{
+			sendChatMessage("");
+			return "";
+		}
 		
 		//Check if message has not been confirmed and a message has been sent
 		if (m_HasSentMessage && !m_HasConfirmedMessage)
@@ -148,12 +156,14 @@ public class ServerConnection {
 				m_HasSentMessage = false;
 				m_HasConfirmedMessage = true;
 				m_SentMessage = "";
-				System.out.println("success\n");
+				System.out.println("success");
+				return "";
 			}
 		}
-		else
+		else if (!m_HasSentMessage)
 		{
 			//Send ack
+			System.out.println("Sent ack");
 			sendChatMessage("");
 		}
 		
@@ -169,27 +179,7 @@ public class ServerConnection {
 				m_IsConnected = false;
 		}
 		
-		//Format output differently depending on input
-		String returnString = "";
-		if (inputs[1].contains("true") || inputs[1].contains("false"))
-		{
-			if (inputs[2].equals(m_name))
-				returnString = input.substring(inputs[0].length() + inputs[1].length() + inputs[2].length() + 3, input.length());
-			else
-				returnString = input.substring(inputs[0].length() + inputs[1].length() + 2, input.length());
-		}
-		else 
-			returnString = input.substring(inputs[0].length() + 1, input.length());
-		
-		//If the received message was an acknowledgement, do not print it
-		if (inputs.length == 3)
-		{
-			System.out.print("Input was an ack, returning");
-			m_HasConfirmedMessage = true;
-			m_HasSentMessage = false;
-			m_SentMessage = "";
-			return "";
-		}
+		String returnString = input.substring(inputs[0].length() + inputs[1].length() + 2);
 
 		// Note that the main thread can block on receive here without
 		// problems, since the GUI runs in a separate thread
@@ -215,14 +205,14 @@ public class ServerConnection {
 			// * marshal message if necessary
 			// * send a chat message to the server
 			m_OutBuf = m_SentMessage.getBytes();
-			System.out.println("Sent message is: " + m_SentMessage + "\n");
+			System.out.println("Sent message is: " + m_SentMessage);
 			m_OutPacket = new DatagramPacket(m_OutBuf, m_OutBuf.length, m_serverAddress, m_serverPort);
 			m_socket.send(m_OutPacket);	
 		} 
 		else 
 		{
 			//Message got lost
-			System.out.println("The message: '" + m_SentMessage + "' was lost!\n");
+			System.out.println("The message: '" + m_SentMessage + "' was lost!");
 		}
 		//If message sent was not an ack
 		if (m_SentMessage.split(" ").length > 3)
