@@ -141,6 +141,8 @@ public class ServerConnection {
 		String input = new String(m_InBuf, 0, m_InPacket.getLength());
 		String inputs[] = input.split(" ");
 		
+		System.out.println("Received message is: " + input);
+		
 		if (input.equals("heartbeat"))
 		{
 			sendChatMessage("");
@@ -156,8 +158,6 @@ public class ServerConnection {
 				m_HasSentMessage = false;
 				m_HasConfirmedMessage = true;
 				m_SentMessage = "";
-				System.out.println("success");
-				return "";
 			}
 		}
 		else if (!m_HasSentMessage)

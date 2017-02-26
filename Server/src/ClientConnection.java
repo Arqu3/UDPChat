@@ -22,6 +22,7 @@ public class ClientConnection {
 	private final int m_port;
 	private byte[] m_OutBuf = new byte[4096];
 	private DatagramPacket m_OutPacket;
+	private Integer m_Counter = 0;
 
 	public ClientConnection(String name, InetAddress address, int port) {
 		m_name = name;
@@ -41,6 +42,7 @@ public class ClientConnection {
 			m_OutPacket = new DatagramPacket(m_OutBuf, m_OutBuf.length, m_address, m_port);
 			
 			socket.send(m_OutPacket);
+			IncrementCounter();
 		} 
 		else 
 		{
@@ -56,5 +58,20 @@ public class ClientConnection {
 	public String getName()
 	{
 		return m_name;
+	}
+	
+	public Integer GetCounter()
+	{
+		return m_Counter;
+	}
+	
+	void IncrementCounter()
+	{
+		m_Counter++;
+	}
+	
+	public void ResetCounter()
+	{
+		m_Counter = 0;
 	}
 }

@@ -60,6 +60,7 @@ public class Client implements ActionListener {
 		// the text in the chat input field can now be sent to the server.
 		String send = m_GUI.getInput();
 		try {
+			//Only send messages that are not empty
 			if (!send.equals(""))
 				m_connection.sendChatMessage(send);
 		} catch (IOException e1) {

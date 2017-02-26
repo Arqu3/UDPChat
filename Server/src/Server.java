@@ -24,7 +24,6 @@ public class Server {
 	private String m_SentMessage = "";
 	private int m_TimeOut = 100;
 	private ArrayList<String> m_ReplyNames = new ArrayList<String>();
-	private ArrayList<Integer> m_Heartbeats = new ArrayList<Integer>();
 	private final Integer m_NumHeart = 10;
 	private Integer m_Counter = 0;
 
@@ -61,35 +60,35 @@ public class Server {
 			}
 			catch (SocketTimeoutException e) 
 			{
-				if (m_Counter > 5)
+				//Send a heart-beat signal every 5th timeout
+				if (m_Counter >= 5)
 				{
 					for (int i = 0; i < m_connectedClients.size(); i++)
 					{
 						m_connectedClients.get(i).sendMessage("heartbeat", m_socket);
-						AddToNameList(m_connectedClients.get(i).getName());
-						Integer val = m_Heartbeats.get(i);
-						val++;
-						m_Heartbeats.set(i, val);
-						System.out.println(m_Heartbeats.get(i));
 						
-						if (m_Heartbeats.get(i) > m_NumHeart)
-							removeClient(m_connectedClients.get(i).getName());
+						//Assume client is crashed if its internal counter is greater than set value, remove it
+						if (m_connectedClients.get(i).GetCounter() > m_NumHeart)
+						{
+							m_ReplyNames.remove(m_connectedClients.get(i).getName());
+							removeClient(m_connectedClients.get(i).getName());	
+						}
 					}
 					m_Counter = 0;
-					System.out.println("Sent heartbeats");
 				}
+				
 				m_Counter++;
 				
+				//Send out non-ack messages to each waiting client
 				if (m_SentMessage.split(" ").length > 3)
 				{					
-					String names = "";
+					//String names = "";
 					for (int i = 0; i < m_ReplyNames.size(); i++)
 					{
-						names += m_ReplyNames.get(i) + " ";
-						sendPrivateMessage(m_SentMessage, m_ReplyNames.get(i));
-						//System.out.println(m_SentMessage + " : " + m_ReplyNames.get(i));		
+						//names += m_ReplyNames.get(i) + " ";
+						sendPrivateMessage(m_SentMessage, m_ReplyNames.get(i));		
 					}
-					System.out.println("Sent reply to: " + names);
+					//System.out.println("Sent reply to: " + names);
 				}
 				continue;
 			}
@@ -103,22 +102,6 @@ public class Server {
 			System.out.println("Server received message: " + indata);
 			String inputs[] = indata.split(" ");
 			
-			//Check if message has not been confirmed and a message has been sent
-			/*if (m_HasSentMessage && !m_HasConfirmedMessage)
-			{
-				//Compare ID with response, if correct then done
-				for (int i = 0; i < m_ReplyNames.size(); i++)
-				{
-					if (inputs[2].equals(m_ReplyNames.get(i)))
-					{
-						m_HasSentMessage = false;
-						m_HasConfirmedMessage = true;
-						m_SentMessage = "";
-						System.out.println("success 1");
-						break;
-					}		
-				}	
-			}*/
 			String replyID = inputs[0];
 			//Client must be connected
 			if (inputs[1].contains("true"))
@@ -155,13 +138,13 @@ public class Server {
 									m_OutBuf = reply.getBytes();
 									m_OutPacket = new DatagramPacket(m_OutBuf, m_OutBuf.length, m_InPacket.getAddress(), m_InPacket.getPort());
 									m_socket.send(m_OutPacket);
+									m_ReplyNames.remove(name);
+									m_SentMessage = "";
 									
 									broadcast(replyID + " true " + name +" disconnected");
 								}
 								else
-								{
 									System.out.println("Could not disconnect client with name " + name);
-								}
 							}
 							// - Send a private message to a user using sendPrivateMessage()
 							else if (command.equals("/Whisper") || command.equals("/whisper") || command.equals("/W") || command.equals("/w"))
@@ -180,17 +163,11 @@ public class Server {
 										if (i < inputs.length - 1)
 											combinedReply += " ";
 									}
-									//Send message to client that was whispered
+									//Send messages to clients
 									String send = replyID + " true " + name + " -> " + toName + ": " + combinedReply;
 									sendPrivateMessage(send, toName);
 									sendPrivateMessage(send, name);
 									
-									/*String sendTo = replyID + " true " + "From " + name + ": " + combinedReply;
-									sendPrivateMessage(sendTo, toName);
-									
-									//Send back confirmation to client that whispered
-									String sendBack = replyID + " true " + "To " + toName + ": " + combinedReply;
-									sendPrivateMessage(sendBack, name);*/
 								}
 								else
 								{
@@ -206,10 +183,6 @@ public class Server {
 								sendPrivateMessage(reply, name);
 							}	
 						}
-						else
-						{
-							//Command was null
-						}
 					}
 					// - Broadcast the message to all connected users using broadcast()
 					else
@@ -221,21 +194,29 @@ public class Server {
 					}
 				}
 				else
-				{
+				{	
 					//Message received was an ack
+					//Reset heartbeat counters
+					for (int i = 0; i < m_connectedClients.size(); i++)
+					{
+						if (m_connectedClients.get(i).getName().equals(inputs[2]))
+						{
+							m_connectedClients.get(i).ResetCounter();
+							break;
+						}
+					}
+					
+					//Get successful acks, remove them from list 
 					for (int i = 0; i < m_ReplyNames.size(); i++)
 					{
 						if (inputs[2].equals(m_ReplyNames.get(i)))
-						{
-							//m_HasSentMessage = false;
-							//m_HasConfirmedMessage = true;
-							
-							m_Heartbeats.set(i, 0);
+						{	
 							m_ReplyNames.remove(i);
 							System.out.println("success ack");
 							break;
 						}		
 					}
+					//If no clients are waiting, set sent message to empty
 					if (m_ReplyNames.size() == 0)
 						m_SentMessage = "";
 				}
@@ -277,26 +258,6 @@ public class Server {
 					m_socket.send(m_OutPacket);
 				}
 			}
-			
-			//Check if message has not been confirmed and a message has been sent
-			//This code is to try and prevent sending duplicates
-			/*if ((m_HasSentMessage && !m_HasConfirmedMessage))
-			{
-				String input = new String(m_InBuf, 0, m_InPacket.getLength());
-				String inputs1[] = input.split(" ");
-				//Compare ID with response, if correct then done
-				for (int i = 0; i < m_ReplyNames.size(); i++)
-				{
-					if (inputs1[2].equals(m_ReplyNames.get(i)))
-					{
-						m_HasSentMessage = false;
-						m_HasConfirmedMessage = true;
-						m_SentMessage = "";
-						System.out.println("success 2");
-						break;
-					}		
-				}
-			}*/
 		}
 	}
 
@@ -311,23 +272,19 @@ public class Server {
 		}
 		System.out.println(name + " successfully added to connections");
 		m_connectedClients.add(new ClientConnection(name, address, port));
-		m_Heartbeats.add(0);
 		return true;
 	}
 	
 	public boolean removeClient(String name)
 	{
 		ClientConnection c;
-		int i = 0;
 		for (Iterator<ClientConnection> itr = m_connectedClients.iterator(); itr.hasNext();) {
 			c = itr.next();
 			if (c.hasName(name)) {
 				System.out.println("Removed client " + name);
-				m_Heartbeats.remove(i);
 				itr.remove();
 				return true; //Remove client
 			}
-			i++;
 		}
 		//Could not find client to remove
 		System.out.println("Client with name " + name + " does not exist!");
@@ -365,11 +322,11 @@ public class Server {
 
 	public void broadcast(String message) throws IOException {
 		m_SentMessage = message;
-		ClientConnection con;
+		ClientConnection c;
 		for (Iterator<ClientConnection> itr = m_connectedClients.iterator(); itr.hasNext();) {
-			con = itr.next();
-			AddToNameList(con.getName());
-			con.sendMessage(message, m_socket);
+			c = itr.next();
+			AddToNameList(c.getName());
+			c.sendMessage(message, m_socket);
 		}
 	}
 	
